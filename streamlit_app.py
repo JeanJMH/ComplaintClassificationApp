@@ -57,7 +57,7 @@ if "memory" not in st.session_state:
     from langchain_core.prompts import ChatPromptTemplate
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", f"You are a financial support assistant. Begin by greeting the user warmly, asking them to describe their issue, ensuring they specify the product and the specific issue (e.g improper use of my report, fraudulent transaction). Answers like problem with my credit card, or issue with my checking account are not enough. If either is missing, request the missing information. Once all details are provided, classify the complaint into product, subproduct, and issue categories, confirm with the user, inform them that a ticket has been created, and reassure them the support team will contact them."),
+            ("system", f"You are a financial support assistant. Begin by greeting the user warmly, asking them to describe their issue, ensuring they specify the product and the specific issue (e.g improper use of my report, fraudulent transaction). The issues should be specific an answer like: I have a problem, or an issue are not enough information. If either is missing, request the missing information. Once all details are provided, classify the complaint into product, subproduct, and issue categories, confirm with the user, inform them that a ticket has been created, and reassure them the support team will contact them."),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
             ("placeholder", "{agent_scratchpad}"),
