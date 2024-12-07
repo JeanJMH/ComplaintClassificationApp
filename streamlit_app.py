@@ -11,6 +11,8 @@ from langchain_community.utilities.jira import JiraAPIWrapper
 from langchain_community.agent_toolkits.jira.toolkit import JiraToolkit
 from langchain import hub
 
+
+
 # Show title and description
 st.title("💬 Financial Support Chatbot")
 ### Adding subproducts
@@ -27,7 +29,9 @@ if url:
 
 product_categories = df1['Product'].unique().tolist()
 
-# Initialize session state variables if not already initialized
+### Important part.
+# Create a session state variable to flag whether the app has been initialized.
+# This code will only be run the first time the app is loaded.
 if "memory" not in st.session_state:
     model_type = "gpt-4o-mini"
 
@@ -53,17 +57,7 @@ if "memory" not in st.session_state:
     from langchain_core.prompts import ChatPromptTemplate
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                f"You are a helpful assistant analyzing customer complaints. "
-                f"Always greet the user warmly in the first interaction. "
-                f"Based on the conversation so far and what the user just mentioned, "
-                f"determine if the user has provided:\n"
-                f"1. A product (e.g., credit card, savings account).\n"
-                f"2. A specific issue or problem (e.g., 'fraudulent transactions', 'stolen card').\n\n"
-                f"Respond naturally and warmly to acknowledge provided details and politely ask for any missing information. "
-                f"Conclude data collection once sufficient details for classification (product and issue) are provided."
-            ),
+            ("system", f"You are a financial support assistant. Begin by greeting the user warmly and asking them to describe their issue. Wait for the user to describe their problem. Once the issue is described, classify the complaint strictly based on these possible categories: {product_categories}. Kindly inform the user that a ticket has been created, provide the category assigned to their complaint, and reassure them that the issue will be forwarded to the appropriate support team, who will reach out to them shortly. Maintain a professional and empathetic tone throughout."),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
             ("placeholder", "{agent_scratchpad}"),
@@ -77,12 +71,14 @@ if "identified_product" not in st.session_state:
     st.session_state.identified_product = None
 if "identified_subproduct" not in st.session_state:
     st.session_state.identified_subproduct = None
-if "identified_issue" not in st.session_state:  # Added check for identified issue
-    st.session_state.identified_issue = None
 
 # Display the existing chat messages via `st.chat_message`
 for message in st.session_state.memory.buffer:
     st.chat_message(message.type).write(message.content)
+
+
+#################
+
 
 # Initialize subproduct_source and issue_source globally
 subproduct_source = "No source identified"
@@ -90,6 +86,7 @@ issue_source = "No source identified"
 
 # Create a chat input field to allow the user to enter a message
 if prompt := st.chat_input("How can I help?"):
+    
     # User message
     st.chat_message("user").write(prompt)
 
@@ -99,43 +96,99 @@ if prompt := st.chat_input("How can I help?"):
     # Extract the identified product category from the response
     identified_product = None
     for category in product_categories:
-        if category.lower() in prompt.lower():  # Use prompt instead of response for better user context
+        if category.lower() in response.lower():
             identified_product = category
             st.session_state.identified_product = category
             break
 
-    # ---- Start of changes ----
-    # Adjust the flow to check for missing details
-    if not st.session_state.get("identified_product"):
-        st.chat_message("assistant").write(
-            "Thank you for sharing that you're having an issue. Could you please specify which product you're referring to, like a credit card, savings account, or something else?"
-        )
-    elif not st.session_state.get("identified_issue"):
-        # Update identified issue based on user input
-        for issue in df1[df1['Product'] == st.session_state.identified_product]['Issue'].unique():
-            if issue.lower() in prompt.lower():
-                st.session_state.identified_issue = issue
-                break
+    # Create a single unified response message
+    if identified_product:
+        # Filter the dataset to find subcategories for the identified product
+        subproducts = df1[df1['Product'] == identified_product]['Sub-product'].unique().tolist()
 
-        # If issue is identified, confirm and proceed
-        if st.session_state.identified_issue:
-            st.chat_message("assistant").write(
-                f"Thank you for clarifying that you’re experiencing {st.session_state.identified_issue} with your {st.session_state.identified_product}. "
-                "It seems we have all the necessary details. If there’s anything else you need help with, let me know!"
+        # Use the model to identify the best matching subproduct
+        identified_subproduct = None
+        if subproducts:
+            # Create a prompt to evaluate the closest subproduct
+            subproduct_prompt = (
+                f"The user described the following issue: '{prompt}'. Based on the description, "
+                f"please identify the most relevant subproduct from the following list: {subproducts}. "
+                "If none of the subproducts match exactly, respond with the most general category."
             )
-        else:
-            st.chat_message("assistant").write(
-                f"I see you're having an issue with your {st.session_state.identified_product}. Could you please describe the specific issue you're facing, such as 'fraudulent transactions,' 'billing errors,' or another issue?"
+
+            # Invoke the model to determine the subproduct
+            subproduct_response = st.session_state.agent_executor.invoke({"input": subproduct_prompt})['output']
+
+            # Check if the model identified a valid subproduct
+            for subproduct in subproducts:
+                if subproduct.lower() in subproduct_response.lower():
+                    identified_subproduct = subproduct
+                    st.session_state.identified_subproduct = identified_subproduct
+                    subproduct_source = "LLM"
+                    break
+
+            # Fallback: Select the first subproduct if none is confidently identified
+            if not identified_subproduct:
+                identified_subproduct = subproducts[0]
+                st.session_state.identified_subproduct = identified_subproduct
+                subproduct_source = "Fallback (most general category)"
+
+        # Filter the dataset to find "Issues" for the identified product and subproduct
+        issues = df1[(df1['Product'] == identified_product) & (df1['Sub-product'] == identified_subproduct)]['Issue'].unique().tolist()
+
+        # Use the model to identify the most relevant "Issue"
+        identified_issue = None
+        if issues:
+            # Create a prompt to evaluate the closest issue
+            issue_prompt = (
+                f"The user described the following issue: '{prompt}'. Based on the description, "
+                f"please identify the most relevant issue from the following list: {issues}. "
+                "If none of the issues match exactly, respond with the most general category."
             )
-    else:
-        # Proceed to classify and create a ticket only if both product and issue are identified
+
+            # Invoke the model to determine the issue
+            issue_response = st.session_state.agent_executor.invoke({"input": issue_prompt})['output']
+
+            # Check if the model identified a valid issue
+            for issue in issues:
+                if issue.lower() in issue_response.lower():
+                    identified_issue = issue
+                    st.session_state.identified_issue = identified_issue
+                    issue_source = "LLM"
+                    break
+
+            # Fallback: Select the first issue if none is confidently identified
+            if not identified_issue:
+                identified_issue = issues[0]
+                st.session_state.identified_issue = identified_issue
+                issue_source = "Fallback (most general category)"
+
+        # Create acknowledgment message
         unified_response = (
-            f"Thank you for providing the details of your issue. Based on your description, your complaint has been categorized under: **{st.session_state.identified_product}**, "
-            f"with the issue categorized as: **{st.session_state.identified_issue}**. A ticket has been created for your issue, and it will be forwarded to the appropriate support team. "
+            f"Thank you for providing the details of your issue. Based on your description, your complaint has been categorized under: **{identified_product}**, "
+            f"specifically the subcategory: **{identified_subproduct}**, with the issue categorized as: **{identified_issue}**. A ticket has been created for your issue, and it will be forwarded to the appropriate support team. "
             "They will reach out to you shortly to assist you further. If you have any more questions or need additional assistance, please let me know!"
         )
+
+        # Display acknowledgment message
         st.chat_message("assistant").write(unified_response)
-    # ---- End of changes ----
+
+        # Add a message to confirm the issue identification source
+        if issue_source == "LLM":
+            st.write("The issue was directly identified by the model.")
+        else:
+            st.write("The issue was not directly identified by the model. The most general category was selected.")
+
+        # For troubleshooting purposes, print the identified product, subproduct, and issue
+        st.write("Troubleshooting: Identified Product, Subproduct, and Issue")
+        st.write(f"Product: {identified_product}")
+        st.write(f"Subproduct: {identified_subproduct if identified_subproduct else 'No subproduct identified'}")
+        st.write(f"Issue: {identified_issue if identified_issue else 'No issue identified'}")
+        st.write("Troubleshooting: List of issues for the identified product and subproduct:")
+        st.write(issues)
+
+    else:
+        st.chat_message("assistant").write(response)  # Default response when no category is identified
 
 # Consolidate sidebar display here (only once)
 if st.session_state.identified_product:
