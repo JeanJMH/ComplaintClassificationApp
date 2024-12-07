@@ -44,13 +44,13 @@ product_categories = df1['Product'].unique()
 try:
     model_type = "gpt-4o-mini"
     chat = ChatOpenAI(openai_api_key=st.secrets["OPENAI_API_KEY"], model=model_type)
-    
-    @tool
+
+    # Define tools
     def datetoday(dummy: str) -> str:
         """Returns today's date."""
         return "Today is " + str(date.today())
 
-    tools = [datetoday]
+    tools = [{"name": "datetoday", "func": datetoday, "description": "Returns today's date."}]
 
     # Define agent prompt
     prompt = ChatPromptTemplate.from_messages(
@@ -64,9 +64,10 @@ try:
             ("placeholder", "{agent_scratchpad}"),
         ]
     )
-    
+
     agent = create_tool_calling_agent(chat, tools, prompt)
     st.session_state.agent_executor = AgentExecutor(agent=agent, tools=tools, memory=st.session_state.memory, verbose=True)
+
 except KeyError:
     st.error("API key missing! Please set 'OPENAI_API_KEY' in your Streamlit secrets.")
     st.stop()
@@ -75,12 +76,7 @@ except KeyError:
 st.write("### Chat History")
 if "buffer" in st.session_state.memory and st.session_state.memory.buffer:
     for message in st.session_state.memory.buffer:
-        if isinstance(message, dict) and "type" in message and "content" in message:
-            st.chat_message(message["type"]).write(message["content"])
-        else:
-            st.write("Skipping invalid message:", message)
-else:
-    st.write("No chat history available.")
+        st.chat_message(message.type).write(message.content)
 
 # User Input Handling
 if not st.session_state.conversation_closed:
@@ -100,7 +96,7 @@ if not st.session_state.conversation_closed:
                 "Thank you! This is the summary of your complaint. Please review the summary below and press the 'Submit' button to finalize."
             )
 
-# Submit Button Always Visible
+# Submit Button
 if st.button("Submit") and st.session_state.ready_to_submit:
     try:
         memory_messages = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.memory.chat_memory.messages])
