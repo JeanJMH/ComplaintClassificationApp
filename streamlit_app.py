@@ -55,22 +55,12 @@ if "memory" not in st.session_state:
     
     # Create the agent with memory
     from langchain_core.prompts import ChatPromptTemplate
-        prompt = ChatPromptTemplate.from_messages(
+    prompt = ChatPromptTemplate.from_messages(
         [
-            {
-                "role": "system",
-                "content": (
-                    f"You are a financial support assistant. Begin by greeting the user warmly and empathetically. "
-                    f"Politely ask the user to describe their problem, making sure to specify the product and the issue they are experiencing. "
-                    f"If the user does not mention a product or an issue in their initial description, politely request the missing information. "
-                    f"Once the product and issue are provided, classify the complaint strictly based on these possible categories. "
-                    f"Kindly inform the user that a ticket has been created, provide the category assigned to their complaint, and reassure them that the issue will be forwarded to the appropriate support team. "
-                    f"Maintain a professional, empathetic, and patient tone throughout the conversation."
-                )
-            },
-            {"role": "system", "content": "{chat_history}"},
-            {"role": "user", "content": "{input}"},
-            {"role": "system", "content": "{agent_scratchpad}"}
+            ("system", f"You are a financial support assistant. Begin by greeting the user warmly and asking them to describe their issue. Wait for the user to describe their problem, making sure to specify the product and the issue they are experiencing. If the user does not mention a product or an issue in their initial description, politely request the missing information. Once the issue is described, classify the complaint strictly based on these possible categories of product and issue. Kindly inform the user that a ticket has been created, provide the category assigned to their complaint, and reassure them that the issue will be forwarded to the appropriate support team, who will reach out to them shortly. Maintain a professional and empathetic tone throughout."),
+            ("placeholder", "{chat_history}"),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
         ]
     )
     agent = create_tool_calling_agent(chat, tools, prompt)
