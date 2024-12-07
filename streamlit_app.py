@@ -44,8 +44,6 @@ try:
     model_type = "gpt-4o-mini"
     chat = ChatOpenAI(openai_api_key=st.secrets["OPENAI_API_KEY"], model=model_type)
     
-    # Define tools
-    from langchain.agents import tool
     @tool
     def datetoday(dummy: str) -> str:
         """Returns today's date."""
@@ -66,7 +64,6 @@ try:
         ]
     )
     
-    # Create agent
     agent = create_tool_calling_agent(chat, tools, prompt)
     st.session_state.agent_executor = AgentExecutor(agent=agent, tools=tools, memory=st.session_state.memory, verbose=True)
 except KeyError:
@@ -75,9 +72,16 @@ except KeyError:
 
 # Display Chat History
 st.write("### Chat History")
-for message in st.session_state.memory.buffer:
-    st.chat_message(message.type).write(message.content)
+if "buffer" in st.session_state.memory and st.session_state.memory.buffer:
+    for message in st.session_state.memory.buffer:
+        if isinstance(message, dict) and "type" in message and "content" in message:
+            st.chat_message(message["type"]).write(message["content"])
+        else:
+            st.write("Skipping invalid message:", message)
+else:
+    st.write("No chat history available.")
 
+# User Input Handling
 if not st.session_state.conversation_closed:
     if user_input := st.chat_input("Describe your issue:"):
         st.session_state.memory.chat_memory.add_message({"role": "user", "content": user_input})
