@@ -57,14 +57,16 @@ if "memory" not in st.session_state:
     from langchain_core.prompts import ChatPromptTemplate
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", 
-             f"You are a financial support assistant. Begin by greeting the user warmly and asking them to describe their issue. "
-             f"Wait for the user to describe their problem. Once the issue is described, classify the complaint strictly based on these possible categories: {product_categories}, {subproduct_categories}, and {subissue_categories}. "
-             f"Kindly inform the user that a ticket has been created, provide the category assigned to their complaint, and reassure them that the issue will be forwarded to the appropriate support team, who will reach out to them shortly. "
-             f"Maintain a professional and empathetic tone throughout."), 
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
+            {"role": "system", 
+             "content": (
+                 f"You are a financial support assistant. Begin by greeting the user warmly and asking them to describe their issue. "
+                 f"Wait for the user to describe their problem. Once the issue is described, classify the complaint strictly based on these possible categories: {product_categories}, {subproduct_categories}, and {subissue_categories}. "
+                 f"Kindly inform the user that a ticket has been created, provide the category assigned to their complaint, and reassure them that the issue will be forwarded to the appropriate support team, who will reach out to them shortly. "
+                 f"Maintain a professional and empathetic tone throughout."
+             )},
+            {"role": "system", "content": "{chat_history}"},
+            {"role": "user", "content": "{input}"},
+            {"role": "system", "content": "{agent_scratchpad}"}
         ]
     )
     agent = create_tool_calling_agent(chat, tools, prompt)
