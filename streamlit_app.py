@@ -55,7 +55,7 @@ if "memory" not in st.session_state:
     
     # Create the agent with memory
     from langchain_core.prompts import ChatPromptTemplate
-    prompt = ChatPromptTemplate.from_messages(
+        prompt = ChatPromptTemplate.from_messages(
         [
             {
                 "role": "system",
