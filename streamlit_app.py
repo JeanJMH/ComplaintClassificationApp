@@ -11,191 +11,148 @@ from langchain_community.utilities.jira import JiraAPIWrapper
 from langchain_community.agent_toolkits.jira.toolkit import JiraToolkit
 from langchain import hub
 
+# Title and Description
+st.title("💬 Financial Complaint Classifier")
+st.write("A chatbot to classify customer complaints and create Jira tasks if needed.")
 
-
-# Show title and description
-st.title("💬 Financial Support Chatbot")
-### Adding subproducts
-url = "https://raw.githubusercontent.com/JeanJMH/Financial_Classification/main/Classification_data.csv"
-st.write(url)
-
-# Load the dataset if a valid URL is provided
-if url:
-    try:
-        df1 = pd.read_csv(url)
-        st.write(df1)
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-
-product_categories = df1['Product'].unique().tolist()
-
-### Important part.
-# Create a session state variable to flag whether the app has been initialized.
-# This code will only be run the first time the app is loaded.
+# Initialize Session State
 if "memory" not in st.session_state:
+    st.session_state.memory = ConversationBufferWindowMemory(memory_key="chat_history", k=10, return_messages=True)
+
+if "classification_results" not in st.session_state:
+    st.session_state.classification_results = {}
+
+if "conversation_closed" not in st.session_state:
+    st.session_state.conversation_closed = False
+
+if "ready_to_submit" not in st.session_state:
+    st.session_state.ready_to_submit = False
+
+# Load Dataset
+url = "https://raw.githubusercontent.com/JeanJMH/Financial_Classification/main/Classification_data.csv"
+try:
+    df1 = pd.read_csv(url)
+    st.write("Dataset loaded successfully. 🎉")
+except Exception as e:
+    st.error(f"Error loading dataset: {e}")
+    st.stop()
+
+product_categories = df1['Product'].unique()
+
+# Initialize OpenAI Chat and Agent
+try:
     model_type = "gpt-4o-mini"
-
-    # Initialize the memory
-    max_number_of_exchanges = 10
-    st.session_state.memory = ConversationBufferWindowMemory(memory_key="chat_history", k=max_number_of_exchanges, return_messages=True)
-
-    # LLM
-    chat = ChatOpenAI(openai_api_key=st.secrets["OpenAI_API_KEY"], model=model_type)
-
-    # Tools
+    chat = ChatOpenAI(openai_api_key=st.secrets["OPENAI_API_KEY"], model=model_type)
+    
+    # Define tools
     from langchain.agents import tool
     @tool
     def datetoday(dummy: str) -> str:
-        """Returns today's date, use this for any \
-        questions that need today's date to be answered. \
-        This tool returns a string with today's date."""
+        """Returns today's date."""
         return "Today is " + str(date.today())
 
     tools = [datetoday]
-    
-    # Create the agent with memory
-    from langchain_core.prompts import ChatPromptTemplate
+
+    # Define agent prompt
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", f"You are a financial support assistant. Begin by greeting the user warmly and asking them to describe their issue. Wait for the user to describe their problem. Once the issue is described, classify the complaint strictly based on these possible categories: {product_categories}. Kindly inform the user that a ticket has been created, provide the category assigned to their complaint, and reassure them that the issue will be forwarded to the appropriate support team, who will reach out to them shortly. Maintain a professional and empathetic tone throughout."),
+            ("system", f"You are a financial support assistant. "
+                       f"Guide users to classify their complaints. "
+                       f"Classify complaints based on these categories: {product_categories}. "
+                       f"Provide clear and empathetic feedback."),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
             ("placeholder", "{agent_scratchpad}"),
         ]
     )
+    
+    # Create agent
     agent = create_tool_calling_agent(chat, tools, prompt)
     st.session_state.agent_executor = AgentExecutor(agent=agent, tools=tools, memory=st.session_state.memory, verbose=True)
+except KeyError:
+    st.error("API key missing! Please set 'OPENAI_API_KEY' in your Streamlit secrets.")
+    st.stop()
 
-# Define a key in session state to store the identified product and subproduct
-if "identified_product" not in st.session_state:
-    st.session_state.identified_product = None
-if "identified_subproduct" not in st.session_state:
-    st.session_state.identified_subproduct = None
-
-# Display the existing chat messages via `st.chat_message`
+# Display Chat History
+st.write("### Chat History")
 for message in st.session_state.memory.buffer:
     st.chat_message(message.type).write(message.content)
 
+if not st.session_state.conversation_closed:
+    if user_input := st.chat_input("Describe your issue:"):
+        st.session_state.memory.chat_memory.add_message({"role": "user", "content": user_input})
+        st.chat_message("user").write(user_input)
 
-#################
+        # Generate agent response
+        response = st.session_state.agent_executor.invoke({"input": user_input})['output']
+        st.session_state.memory.chat_memory.add_message({"role": "assistant", "content": response})
+        st.chat_message("assistant").write(response)
 
-
-# Initialize subproduct_source and issue_source globally
-subproduct_source = "No source identified"
-issue_source = "No source identified"
-
-# Create a chat input field to allow the user to enter a message
-if prompt := st.chat_input("How can I help?"):
-    
-    # User message
-    st.chat_message("user").write(prompt)
-
-    # Generate a response using the OpenAI API
-    response = st.session_state.agent_executor.invoke({"input": prompt})['output']
-    
-    # Extract the identified product category from the response
-    identified_product = None
-    for category in product_categories:
-        if category.lower() in response.lower():
-            identified_product = category
-            st.session_state.identified_product = category
-            break
-
-    # Create a single unified response message
-    if identified_product:
-        # Filter the dataset to find subcategories for the identified product
-        subproducts = df1[df1['Product'] == identified_product]['Sub-product'].unique().tolist()
-
-        # Use the model to identify the best matching subproduct
-        identified_subproduct = None
-        if subproducts:
-            # Create a prompt to evaluate the closest subproduct
-            subproduct_prompt = (
-                f"The user described the following issue: '{prompt}'. Based on the description, "
-                f"please identify the most relevant subproduct from the following list: {subproducts}. "
-                "If none of the subproducts match exactly, respond with the most general category."
+        # Check if ready to submit
+        if "sufficient details" in response.lower():
+            st.session_state.ready_to_submit = True
+            st.chat_message("assistant").write(
+                "Thank you! This is the summary of your complaint. Please review the summary below and press the 'Submit' button to finalize."
             )
 
-            # Invoke the model to determine the subproduct
-            subproduct_response = st.session_state.agent_executor.invoke({"input": subproduct_prompt})['output']
+# Submit Button Always Visible
+if st.button("Submit") and st.session_state.ready_to_submit:
+    try:
+        memory_messages = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.memory.chat_memory.messages])
 
-            # Check if the model identified a valid subproduct
-            for subproduct in subproducts:
-                if subproduct.lower() in subproduct_response.lower():
-                    identified_subproduct = subproduct
-                    st.session_state.identified_subproduct = identified_subproduct
-                    subproduct_source = "LLM"
-                    break
-
-            # Fallback: Select the first subproduct if none is confidently identified
-            if not identified_subproduct:
-                identified_subproduct = subproducts[0]
-                st.session_state.identified_subproduct = identified_subproduct
-                subproduct_source = "Fallback (most general category)"
-
-        # Filter the dataset to find "Issues" for the identified product and subproduct
-        issues = df1[(df1['Product'] == identified_product) & (df1['Sub-product'] == identified_subproduct)]['Issue'].unique().tolist()
-
-        # Use the model to identify the most relevant "Issue"
-        identified_issue = None
-        if issues:
-            # Create a prompt to evaluate the closest issue
-            issue_prompt = (
-                f"The user described the following issue: '{prompt}'. Based on the description, "
-                f"please identify the most relevant issue from the following list: {issues}. "
-                "If none of the issues match exactly, respond with the most general category."
-            )
-
-            # Invoke the model to determine the issue
-            issue_response = st.session_state.agent_executor.invoke({"input": issue_prompt})['output']
-
-            # Check if the model identified a valid issue
-            for issue in issues:
-                if issue.lower() in issue_response.lower():
-                    identified_issue = issue
-                    st.session_state.identified_issue = identified_issue
-                    issue_source = "LLM"
-                    break
-
-            # Fallback: Select the first issue if none is confidently identified
-            if not identified_issue:
-                identified_issue = issues[0]
-                st.session_state.identified_issue = identified_issue
-                issue_source = "Fallback (most general category)"
-
-        # Create acknowledgment message
-        unified_response = (
-            f"Thank you for providing the details of your issue. Based on your description, your complaint has been categorized under: **{identified_product}**, "
-            f"specifically the subcategory: **{identified_subproduct}**, with the issue categorized as: **{identified_issue}**. A ticket has been created for your issue, and it will be forwarded to the appropriate support team. "
-            "They will reach out to you shortly to assist you further. If you have any more questions or need additional assistance, please let me know!"
+        # Step 1: Classify by Product
+        product_prompt = (
+            f"Based on the user's complaint and the following conversation context:\n"
+            f"{memory_messages}\n\n"
+            f"Classify the user's complaint into one of these product categories: {product_categories}."
         )
+        assigned_product = st.session_state.agent_executor.invoke({"input": product_prompt})['output']
+        st.write(f"**Assigned Product:** {assigned_product}")
 
-        # Display acknowledgment message
-        st.chat_message("assistant").write(unified_response)
+        # Step 2: Classify by Sub-product
+        subproduct_options = df1[df1['Product'] == assigned_product]['Sub-product'].unique()
+        subproduct_prompt = (
+            f"Classify the complaint related to '{assigned_product}' into one of these sub-product categories: {subproduct_options}."
+        )
+        assigned_subproduct = st.session_state.agent_executor.invoke({"input": subproduct_prompt})['output']
+        st.write(f"**Assigned Sub-product:** {assigned_subproduct}")
 
-        # Add a message to confirm the issue identification source
-        if issue_source == "LLM":
-            st.write("The issue was directly identified by the model.")
-        else:
-            st.write("The issue was not directly identified by the model. The most general category was selected.")
+        # Step 3: Classify by Issue
+        issue_options = df1[
+            (df1['Product'] == assigned_product) & (df1['Sub-product'] == assigned_subproduct)
+        ]['Issue'].unique()
+        issue_prompt = (
+            f"Classify the complaint about '{assigned_product}' -> '{assigned_subproduct}' into one of these issues: {issue_options}."
+        )
+        assigned_issue = st.session_state.agent_executor.invoke({"input": issue_prompt})['output']
+        st.write(f"**Assigned Issue:** {assigned_issue}")
 
-        # For troubleshooting purposes, print the identified product, subproduct, and issue
-        st.write("Troubleshooting: Identified Product, Subproduct, and Issue")
-        st.write(f"Product: {identified_product}")
-        st.write(f"Subproduct: {identified_subproduct if identified_subproduct else 'No subproduct identified'}")
-        st.write(f"Issue: {identified_issue if identified_issue else 'No issue identified'}")
-        st.write("Troubleshooting: List of issues for the identified product and subproduct:")
-        st.write(issues)
+        # Store results
+        st.session_state.classification_results = {
+            "Product": assigned_product,
+            "Sub-product": assigned_subproduct,
+            "Issue": assigned_issue,
+        }
 
-    else:
-        st.chat_message("assistant").write(response)  # Default response when no category is identified
+        # Display Results and Close Conversation
+        classification_summary = (
+            f"Classification Results:\n"
+            f"- **Product**: {assigned_product}\n"
+            f"- **Sub-product**: {assigned_subproduct}\n"
+            f"- **Issue**: {assigned_issue}\n\n"
+            f"Thank you for submitting your complaint. Our support team will get back to you shortly!"
+        )
+        st.session_state.memory.chat_memory.add_message({"role": "assistant", "content": classification_summary})
+        st.chat_message("assistant").write(classification_summary)
+        st.session_state.conversation_closed = True
 
-# Consolidate sidebar display here (only once)
-if st.session_state.identified_product:
-    st.sidebar.write(f"Stored Product: {st.session_state.identified_product}")
-if "identified_subproduct" in st.session_state:
-    st.sidebar.write(f"Stored Subproduct: {st.session_state.identified_subproduct}")
-    st.sidebar.write(f"Subproduct Identification Source: {subproduct_source}")
-if "identified_issue" in st.session_state:
-    st.sidebar.write(f"Stored Issue: {st.session_state.identified_issue}")
-    st.sidebar.write(f"Issue Identification Source: {issue_source}")
+    except Exception as e:
+        error_message = f"Error during classification: {e}"
+        st.chat_message("assistant").write(error_message)
+
+# Summary Button
+if st.button("Show Classification Summary"):
+    st.write("### Classification Summary")
+    st.write(f"- **Product**: {st.session_state.classification_results.get('Product', 'N/A')}")
+    st.write(f"- **Sub-product**: {st.session_state.classification_results.get('Sub-product', 'N/A')}")
+    st.write(f"- **Issue**: {st.session_state.classification_results.get('Issue', 'N/A')}")
