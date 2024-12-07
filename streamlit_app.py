@@ -10,6 +10,8 @@ from langchain.agents import AgentExecutor, create_react_agent
 from langchain_community.utilities.jira import JiraAPIWrapper
 from langchain_community.agent_toolkits.jira.toolkit import JiraToolkit
 from langchain import hub
+from langchain.agents import tool
+
 
 # Show title and description
 st.title("💬 Financial Support Chatbot")
