@@ -99,7 +99,7 @@ if prompt := st.chat_input("How can I help?"):
     # Extract the identified product category from the response
     identified_product = None
     for category in product_categories:
-        if category.lower() in response.lower():
+        if category.lower() in prompt.lower():  # Use prompt instead of response for better user context
             identified_product = category
             st.session_state.identified_product = category
             break
@@ -111,31 +111,30 @@ if prompt := st.chat_input("How can I help?"):
             "Thank you for sharing that you're having an issue. Could you please specify which product you're referring to, like a credit card, savings account, or something else?"
         )
     elif not st.session_state.get("identified_issue"):
-        st.chat_message("assistant").write(
-            f"I see you're having an issue with your {st.session_state.identified_product}. Could you please describe the specific issue you're facing, such as 'fraudulent transactions,' 'billing errors,' or another issue?"
-        )
+        # Update identified issue based on user input
+        for issue in df1[df1['Product'] == st.session_state.identified_product]['Issue'].unique():
+            if issue.lower() in prompt.lower():
+                st.session_state.identified_issue = issue
+                break
+
+        # If issue is identified, confirm and proceed
+        if st.session_state.identified_issue:
+            st.chat_message("assistant").write(
+                f"Thank you for clarifying that you’re experiencing {st.session_state.identified_issue} with your {st.session_state.identified_product}. "
+                "It seems we have all the necessary details. If there’s anything else you need help with, let me know!"
+            )
+        else:
+            st.chat_message("assistant").write(
+                f"I see you're having an issue with your {st.session_state.identified_product}. Could you please describe the specific issue you're facing, such as 'fraudulent transactions,' 'billing errors,' or another issue?"
+            )
     else:
         # Proceed to classify and create a ticket only if both product and issue are identified
         unified_response = (
             f"Thank you for providing the details of your issue. Based on your description, your complaint has been categorized under: **{st.session_state.identified_product}**, "
-            f"specifically the subcategory: **{st.session_state.identified_subproduct}**, with the issue categorized as: **{st.session_state.identified_issue}**. A ticket has been created for your issue, and it will be forwarded to the appropriate support team. "
+            f"with the issue categorized as: **{st.session_state.identified_issue}**. A ticket has been created for your issue, and it will be forwarded to the appropriate support team. "
             "They will reach out to you shortly to assist you further. If you have any more questions or need additional assistance, please let me know!"
         )
-
-        # Display acknowledgment message
         st.chat_message("assistant").write(unified_response)
-
-        # Add a message to confirm the issue identification source
-        if issue_source == "LLM":
-            st.write("The issue was directly identified by the model.")
-        else:
-            st.write("The issue was not directly identified by the model. The most general category was selected.")
-
-        # For troubleshooting purposes, print the identified product, subproduct, and issue
-        st.write("Troubleshooting: Identified Product, Subproduct, and Issue")
-        st.write(f"Product: {st.session_state.identified_product}")
-        st.write(f"Subproduct: {st.session_state.identified_subproduct if st.session_state.identified_subproduct else 'No subproduct identified'}")
-        st.write(f"Issue: {st.session_state.identified_issue if st.session_state.identified_issue else 'No issue identified'}")
     # ---- End of changes ----
 
 # Consolidate sidebar display here (only once)
