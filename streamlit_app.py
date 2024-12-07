@@ -38,8 +38,9 @@ if "memory" not in st.session_state:
     # Initialize memory
     st.session_state.memory = ConversationBufferWindowMemory(memory_key="chat_history", k=max_number_of_exchanges, return_messages=True)
 
+if "agent_executor" not in st.session_state:
     # Initialize LLM
-    chat = ChatOpenAI(openai_api_key=st.secrets["OpenAI_API_KEY"], model=model_type)
+    chat = ChatOpenAI(openai_api_key=st.secrets["OpenAI_API_KEY"], model="gpt-4o-mini")
 
     # Tools
     @tool
