@@ -1,16 +1,10 @@
 import streamlit as st
 from langchain.memory import ConversationBufferWindowMemory
 from langchain_openai import ChatOpenAI
-from langchain.agents import tool
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
 from datetime import date
 import pandas as pd
-import os
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain_community.utilities.jira import JiraAPIWrapper
-from langchain_community.agent_toolkits.jira.toolkit import JiraToolkit
-from langchain import hub
 
 st.title("💬 Financial Complaint Classifier")
 st.write("A chatbot to classify customer complaints and create Jira tasks if needed.")
