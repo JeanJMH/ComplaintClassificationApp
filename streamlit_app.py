@@ -58,11 +58,10 @@ if "memory" not in st.session_state:
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", 
-                 f"You are a financial support assistant. Begin by greeting the user warmly and asking them to describe their issue."
-                 f"Wait for the user to describe their problem. Once the issue is described, classify the complaint strictly based on these possible categories: {product_categories}, {subproduct_categoires} and {subissue_categories}."
-                 f"Kindly inform the user that a ticket has been created, provide the category assigned to their complaint, and reassure them that the issue will be forwarded to the appropriate support team, who will reach out to them shortly. Maintain a professional and empathetic tone throughout."),
-           
-            
+             f"You are a financial support assistant. Begin by greeting the user warmly and asking them to describe their issue. "
+             f"Wait for the user to describe their problem. Once the issue is described, classify the complaint strictly based on these possible categories: {product_categories}, {subproduct_categories}, and {subissue_categories}. "
+             f"Kindly inform the user that a ticket has been created, provide the category assigned to their complaint, and reassure them that the issue will be forwarded to the appropriate support team, who will reach out to them shortly. "
+             f"Maintain a professional and empathetic tone throughout."), 
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
             ("placeholder", "{agent_scratchpad}"),
