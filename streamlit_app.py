@@ -17,13 +17,13 @@ from langchain import hub
 st.title("💬 Financial Support Chatbot")
 ### Adding subproducts
 url = "https://raw.githubusercontent.com/JeanJMH/Financial_Classification/main/Classification_data.csv"
-st.write(url)
+#st.write(url)
 
 # Load the dataset if a valid URL is provided
 if url:
     try:
         df1 = pd.read_csv(url)
-        st.write(df1)
+        #st.write(df1)
     except Exception as e:
         st.error(f"An error occurred: {e}")
 
@@ -174,18 +174,18 @@ if prompt := st.chat_input("How can I help?"):
         st.chat_message("assistant").write(unified_response)
 
         # Add a message to confirm the issue identification source
-        if issue_source == "LLM":
-            st.write("The issue was directly identified by the model.")
-        else:
-            st.write("The issue was not directly identified by the model. The most general category was selected.")
+        #if issue_source == "LLM":
+        #    st.write("The issue was directly identified by the model.")
+        #else:
+        #    st.write("The issue was not directly identified by the model. The most general category was selected.")
 
         # For troubleshooting purposes, print the identified product, subproduct, and issue
-        st.write("Troubleshooting: Identified Product, Subproduct, and Issue")
-        st.write(f"Product: {identified_product}")
-        st.write(f"Subproduct: {identified_subproduct if identified_subproduct else 'No subproduct identified'}")
-        st.write(f"Issue: {identified_issue if identified_issue else 'No issue identified'}")
-        st.write("Troubleshooting: List of issues for the identified product and subproduct:")
-        st.write(issues)
+        #st.write("Troubleshooting: Identified Product, Subproduct, and Issue")
+        #st.write(f"Product: {identified_product}")
+        #st.write(f"Subproduct: {identified_subproduct if identified_subproduct else 'No subproduct identified'}")
+        #st.write(f"Issue: {identified_issue if identified_issue else 'No issue identified'}")
+        #st.write("Troubleshooting: List of issues for the identified product and subproduct:")
+        #st.write(issues)
 
     else:
         st.chat_message("assistant").write(response)  # Default response when no category is identified
@@ -195,10 +195,10 @@ if st.session_state.identified_product:
     st.sidebar.write(f"Stored Product: {st.session_state.identified_product}")
 if "identified_subproduct" in st.session_state:
     st.sidebar.write(f"Stored Subproduct: {st.session_state.identified_subproduct}")
-    st.sidebar.write(f"Subproduct Identification Source: {subproduct_source}")
+    #st.sidebar.write(f"Subproduct Identification Source: {subproduct_source}")
 if "identified_issue" in st.session_state:
     st.sidebar.write(f"Stored Issue: {st.session_state.identified_issue}")
-    st.sidebar.write(f"Issue Identification Source: {issue_source}")
+    #st.sidebar.write(f"Issue Identification Source: {issue_source}")
 
 
 ############Addign Jira
@@ -229,7 +229,7 @@ if (
         # Extract user description from memory buffer
         if st.session_state.memory.buffer:
             user_description = st.session_state.memory.buffer[-1].content.strip()  # Latest user message
-            st.write(f"User description extracted: {user_description}")  # Debugging step
+            #st.write(f"User description extracted: {user_description}")  # Debugging step
         else:
             st.error("Memory buffer is empty. Cannot extract user description.")
             raise ValueError("Memory buffer is empty.")
@@ -241,7 +241,7 @@ if (
 
         # Create the assigned issue summary
         assigned_issue = f"Issue with {product} - {subproduct}: {issue}"
-        st.write(f"Assigned issue: {assigned_issue}")  # Debugging step
+        #st.write(f"Assigned issue: {assigned_issue}")  # Debugging step
 
         # Define task creation question for the model
         question = (
@@ -271,7 +271,7 @@ if (
 
         # Invoke agent to create Jira task
         result = agent_executor.invoke({"input": question})
-        st.write(f"Agent execution result: {result}")  # Debugging step
+        #st.write(f"Agent execution result: {result}")  # Debugging step
         st.success(f"Jira task created successfully for the issue: {assigned_issue}")
 
         # Store Jira task details in session state
