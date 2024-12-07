@@ -12,7 +12,6 @@ from langchain_community.utilities.jira import JiraAPIWrapper
 from langchain_community.agent_toolkits.jira.toolkit import JiraToolkit
 from langchain import hub
 
-# Title and Description
 st.title("💬 Financial Complaint Classifier")
 st.write("A chatbot to classify customer complaints and create Jira tasks if needed.")
 
@@ -45,12 +44,18 @@ try:
     model_type = "gpt-4o-mini"
     chat = ChatOpenAI(openai_api_key=st.secrets["OPENAI_API_KEY"], model=model_type)
 
-    # Define tools
+    # Define tools inline
     def datetoday(dummy: str) -> str:
         """Returns today's date."""
         return "Today is " + str(date.today())
 
-    tools = [{"name": "datetoday", "func": datetoday, "description": "Returns today's date."}]
+    tools = [
+        {
+            "name": "datetoday",
+            "func": datetoday,
+            "description": "Returns today's date."
+        }
+    ]
 
     # Define agent prompt
     prompt = ChatPromptTemplate.from_messages(
@@ -65,11 +70,12 @@ try:
         ]
     )
 
+    # Create agent and executor
     agent = create_tool_calling_agent(chat, tools, prompt)
     st.session_state.agent_executor = AgentExecutor(agent=agent, tools=tools, memory=st.session_state.memory, verbose=True)
 
-except KeyError:
-    st.error("API key missing! Please set 'OPENAI_API_KEY' in your Streamlit secrets.")
+except Exception as e:
+    st.error(f"Error initializing agent executor: {e}")
     st.stop()
 
 # Display Chat History
